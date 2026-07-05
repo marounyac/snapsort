@@ -1,0 +1,14 @@
+{
+  "name": "SnapSort — AI Photo Organizer",
+  "short_name": "SnapSort",
+  "description": "Import photos and let AI sort them into categories, right on your device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0c10",
+  "theme_color": "#0b0c10",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

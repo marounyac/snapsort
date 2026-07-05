@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SnapSort — AI Photo Organizer</title>
+  <meta name="description" content="Import photos from your gallery and let AI sort them into categories — right in your browser. Private: photos never leave your device.">
+  <meta name="theme-color" content="#0b0c10">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header id="topbar">
+    <button id="tbBack" class="icon-btn" aria-label="Back" hidden>‹</button>
+    <div id="tbTitle"></div>
+    <label for="fileInput" class="btn primary" id="tbImport">＋ Import</label>
+  </header>
+
+  <main id="view"></main>
+
+  <label for="fileInput" class="fab" aria-label="Import photos">＋</label>
+  <input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+  <div id="progressDock" hidden>
+    <div class="pd-row">
+      <span id="pdText"></span>
+      <button id="pdRetry" class="btn small primary" hidden>Retry</button>
+    </div>
+    <div class="pd-track"><div id="pdBar"></div></div>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <div id="dropOverlay" hidden>
+    <div class="drop-msg">📥 Drop photos to import</div>
+  </div>
+
+  <div id="sheetHost" hidden></div>
+
+  <!-- fullscreen photo viewer -->
+  <div id="viewer" class="overlay" hidden>
+    <div id="vStage"><img id="vImg" alt=""></div>
+    <div class="v-top">
+      <button id="vBack" class="icon-btn" aria-label="Close viewer">‹</button>
+      <div class="v-mid">
+        <span id="vChip" class="vchip"></span>
+        <span id="vCount" class="vcount"></span>
+      </div>
+      <button id="vInfoBtn" class="icon-btn" aria-label="Photo info">ⓘ</button>
+    </div>
+    <button id="vPrevBtn" class="vnav prev" aria-label="Previous photo">‹</button>
+    <button id="vNextBtn" class="vnav next" aria-label="Next photo">›</button>
+    <div class="v-bottom">
+      <button id="vEditBtn" class="vact"><span class="ico">✏️</span>Edit</button>
+      <button id="vMoveBtn" class="vact"><span class="ico">📂</span>Move</button>
+      <button id="vSaveBtn" class="vact"><span class="ico">⬇️</span>Save</button>
+      <button id="vDeleteBtn" class="vact"><span class="ico">🗑️</span>Delete</button>
+    </div>
+  </div>
+
+  <!-- photo editor -->
+  <div id="editor" class="overlay" data-tab="crop" hidden>
+    <div class="e-top">
+      <button id="eCancel" class="btn ghost">Cancel</button>
+      <span class="e-title">Edit photo</span>
+      <button id="eSave" class="btn primary">Save</button>
+    </div>
+    <div id="eWrap">
+      <div id="eHolder">
+        <canvas id="eCanvas"></canvas>
+        <div id="eCropBox">
+          <div class="ch" data-h="nw"></div>
+          <div class="ch" data-h="n"></div>
+          <div class="ch" data-h="ne"></div>
+          <div class="ch" data-h="e"></div>
+          <div class="ch" data-h="se"></div>
+          <div class="ch" data-h="s"></div>
+          <div class="ch" data-h="sw"></div>
+          <div class="ch" data-h="w"></div>
+        </div>
+      </div>
+    </div>
+    <div class="e-controls">
+      <div class="e-tabs">
+        <button id="eTabCrop" class="e-tab active">Crop &amp; Rotate</button>
+        <button id="eTabAdjust" class="e-tab">Adjust</button>
+      </div>
+      <div id="ePanelCrop" class="e-panel">
+        <button id="eRotL" class="btn ghost">⟲ Rotate left</button>
+        <button id="eRotR" class="btn ghost">⟳ Rotate right</button>
+        <button id="eFlip" class="btn ghost">⇄ Flip</button>
+        <button id="eCropReset" class="btn ghost">Reset crop</button>
+      </div>
+      <div id="ePanelAdjust" class="e-panel" hidden>
+        <div class="erow">
+          <label for="eBright">Brightness</label>
+          <input type="range" id="eBright" min="40" max="180" value="100" step="1">
+          <span class="val" id="eBrightVal">100%</span>
+        </div>
+        <div class="erow">
+          <label for="eContrast">Contrast</label>
+          <input type="range" id="eContrast" min="40" max="180" value="100" step="1">
+          <span class="val" id="eContrastVal">100%</span>
+        </div>
+        <div class="erow">
+          <label for="eSat">Saturation</label>
+          <input type="range" id="eSat" min="0" max="200" value="100" step="1">
+          <span class="val" id="eSatVal">100%</span>
+        </div>
+        <button id="eAdjReset" class="btn ghost small">Reset adjustments</button>
+      </div>
+      <button id="eRevert" class="e-revert" hidden>↩️ Restore original</button>
+    </div>
+  </div>
+
+  <noscript>
+    <p style="padding:24px;text-align:center">SnapSort needs JavaScript to run — please enable it.</p>
+  </noscript>
+
+  <script src="js/categories.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/classifier.js"></script>
+  <script src="js/viewer.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Offline support when hosted (service workers don't run on file://).
+    if ('serviceWorker' in navigator &&
+        (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
+      addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
