@@ -15,13 +15,16 @@
   <header id="topbar">
     <button id="tbBack" class="icon-btn" aria-label="Back" hidden>‹</button>
     <div id="tbTitle"></div>
+    <label for="cameraInput" class="icon-btn" id="tbCamera" aria-label="Take a photo">📷</label>
     <label for="fileInput" class="btn primary" id="tbImport">＋ Import</label>
   </header>
 
   <main id="view"></main>
 
+  <label for="cameraInput" class="fab cam" aria-label="Take a photo">📷</label>
   <label for="fileInput" class="fab" aria-label="Import photos">＋</label>
   <input type="file" id="fileInput" accept="image/*" multiple hidden>
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
 
   <div id="progressDock" hidden>
     <div class="pd-row">

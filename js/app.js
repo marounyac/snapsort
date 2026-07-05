@@ -207,6 +207,14 @@
     fileInput.value = '';
   });
 
+  // Camera capture — on phones this opens the camera app directly;
+  // on desktop it falls back to a normal file picker.
+  const cameraInput = $('cameraInput');
+  cameraInput.addEventListener('change', () => {
+    handleFiles(cameraInput.files);
+    cameraInput.value = '';
+  });
+
   // Drag & drop (desktop)
   let dragDepth = 0;
   window.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; dropOverlay.hidden = false; });
@@ -488,11 +496,16 @@
       const hero = h('div', 'hero');
       hero.append(h('div', 'hero-emoji', '📸'));
       hero.append(h('h1', 'hero-title', 'Your photos, sorted by AI'));
-      hero.append(h('p', 'hero-sub', 'Import pictures from your gallery and SnapSort files each one into the right category automatically — Nature, Friends & Family, School, Food, and Daily Life.'));
+      hero.append(h('p', 'hero-sub', 'Import pictures from your gallery — or take one with your camera — and SnapSort files each one into the right category automatically: Nature, Friends & Family, School, Food, and Daily Life.'));
+      const btns = h('div', 'hero-btns');
       const btn = h('label', 'btn primary big');
       btn.htmlFor = 'fileInput';
       btn.textContent = '＋ Import photos';
-      hero.append(btn);
+      const camBtn = h('label', 'btn ghost big');
+      camBtn.htmlFor = 'cameraInput';
+      camBtn.textContent = '📷 Take a photo';
+      btns.append(btn, camBtn);
+      hero.append(btns);
       hero.append(h('p', 'hero-note', '🔒 Private: photos never leave your device.\n📥 The first import downloads the AI model (~150 MB, one time) — Wi-Fi recommended.'));
       frag.append(hero);
       view.replaceChildren(frag);

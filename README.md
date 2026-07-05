@@ -10,7 +10,7 @@ To use it on your **phone**, the site needs to be hosted online (for example wit
 
 ## How it works
 
-1. Tap **＋ Import** and pick pictures from your gallery (you can select many at once).
+1. Tap **＋ Import** and pick pictures from your gallery (you can select many at once), or tap **📷** to take a photo with your camera and have it sorted right away.
 2. The AI looks at each photo and files it into the right category and mini-category.
 3. Browse by category, or see everything in **All Photos**.
 4. Tap any photo to view it fullscreen — pinch or double-tap to **zoom**, swipe to move between photos, swipe down to close.
