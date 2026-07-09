@@ -215,6 +215,10 @@
     cameraInput.value = '';
   });
 
+  $('tbLogout').addEventListener('click', async () => {
+    if (await App.confirm('Log out of SnapSort?', 'Log out')) Auth.logOut();
+  });
+
   // Drag & drop (desktop)
   let dragDepth = 0;
   window.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; dropOverlay.hidden = false; });
@@ -624,6 +628,10 @@
       const flag = await DB.getMeta('modelLoadedOnce');
       modelLoadedOnce = !!(flag && flag.value);
     } catch (e) { /* default false */ }
+    Auth.init(startApp);
+  }
+
+  function startApp() {
     render();
     console.log('SnapSort ready —', photos.length, 'photos in library');
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

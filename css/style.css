@@ -91,6 +91,36 @@ button, label.btn, label.fab, label.icon-btn { font: inherit; color: inherit; ba
 }
 @media (min-width: 760px) { .fab { display: none; } }
 
+/* ---------- sign-in gate ---------- */
+
+#authScreen {
+  position: fixed; inset: 0; z-index: 100;
+  background: var(--bg);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: calc(10vh + env(safe-area-inset-top)) 20px 32px;
+  overflow-y: auto;
+}
+body.auth-locked #topbar, body.auth-locked .fab { display: none; }
+
+.auth-card { width: 100%; max-width: 360px; text-align: center; }
+.auth-emoji { font-size: 54px; margin-bottom: 10px; }
+.auth-title { font-size: 27px; font-weight: 800; margin-bottom: 6px; }
+.auth-sub { color: var(--dim); font-size: 14px; line-height: 1.5; margin-bottom: 22px; }
+.auth-form { display: grid; gap: 10px; text-align: left; }
+.auth-input {
+  width: 100%; padding: 13px 14px; border-radius: 12px;
+  background: var(--surface2); border: 1px solid var(--line);
+  color: var(--text); font: inherit; font-size: 15px;
+}
+.auth-input::placeholder { color: var(--dim); }
+.auth-input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.auth-err { color: #ff9297; font-size: 13px; line-height: 1.4; }
+.auth-hello { font-size: 14px; color: var(--text); font-weight: 600; }
+.auth-row { display: flex; gap: 10px; }
+.auth-row .btn { flex: 1; }
+.auth-toggle { margin-top: 20px; color: var(--accent); font-size: 14px; font-weight: 600; }
+.auth-note { margin-top: 16px; color: var(--dim); font-size: 12px; }
+
 /* ---------- main view ---------- */
 
 #view { max-width: 1100px; margin: 0 auto; padding: 14px 12px 130px; }

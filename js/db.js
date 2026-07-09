@@ -2,7 +2,7 @@
 // files, label embeddings) is stored locally in the browser.
 (() => {
   const NAME = 'snapsort-db';
-  const VERSION = 1;
+  const VERSION = 2;
   let dbPromise = null;
 
   function open() {
@@ -15,6 +15,7 @@
         if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
         if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');       // original backups
         if (!db.objectStoreNames.contains('modelcache')) db.createObjectStore('modelcache'); // AI model files
+        if (!db.objectStoreNames.contains('users')) db.createObjectStore('users', { keyPath: 'username' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error || new Error('IndexedDB failed to open'));
@@ -48,5 +49,9 @@
 
     async cacheGet(key)       { return promisify((await store('modelcache', 'readonly')).get(key)); },
     async cachePut(key, blob) { return promisify((await store('modelcache', 'readwrite')).put(blob, key)); },
+
+    async userGet(username)   { return promisify((await store('users', 'readonly')).get(username)); },
+    async userPut(rec)        { return promisify((await store('users', 'readwrite')).put(rec)); },
+    async userCount()         { return promisify((await store('users', 'readonly')).count()); },
   };
 })();
