@@ -276,7 +276,7 @@
         } catch (e) {
           console.error('Could not classify', rec.name, e);
           rec.aiTop = null;
-          rec.miniCat = 'objects';
+          rec.miniCat = 'daily_other';
           rec.mainCat = 'daily';
         }
         rec.status = 'sorted';
@@ -391,7 +391,7 @@
         box.append(line);
       }
     } else if (rec.status === 'sorted') {
-      box.append(h('p', 'sheet-msg dim', "The AI couldn't identify this one — it was placed in Shopping & Objects."));
+      box.append(h('p', 'sheet-msg dim', "The AI couldn't identify this one — it was placed in Daily Life & Home ▸ Other."));
     }
     openSheet(box);
   };
@@ -624,6 +624,17 @@
       return;
     }
     photos.sort((a, b) => b.addedAt - a.addedAt);
+    // Migrate photos saved under mini-categories that no longer exist
+    // (e.g. the old Study sub-categories) to their replacement, or to the
+    // main category's "Other".
+    for (const rec of photos) {
+      if (rec.miniCat && !CATS.byMini[rec.miniCat]) {
+        const fallback = CATS.mainById[rec.mainCat] ? rec.mainCat + '_other' : 'daily_other';
+        rec.miniCat = CATS.legacy[rec.miniCat] || fallback;
+        rec.mainCat = CATS.byMini[rec.miniCat].mainId;
+        try { await DB.putPhoto(rec); } catch (e) { /* keep the in-memory fix */ }
+      }
+    }
     try {
       const flag = await DB.getMeta('modelLoadedOnce');
       modelLoadedOnce = !!(flag && flag.value);

@@ -23,11 +23,13 @@ To use it on your **phone**, the site needs to be hosted online (for example wit
 
 | Main category | Mini-categories |
 |---|---|
-| 🌿 Nature | Landscapes & Mountains · Beach & Sea · Plants & Flowers · Wild Animals & Birds · Sky & Sunsets |
-| 🎉 Friends, Events & Family | Selfies & Portraits · Group Photos · Parties & Celebrations · Weddings & Ceremonies · Family Moments |
-| 📚 Study / School & Homework | Handwritten Notes · Books & Textbooks · Documents & Printouts · Whiteboards & Blackboards · Screens & Slides |
-| 🍔 Food & Drinks | Meals & Dishes · Desserts & Sweets · Drinks & Coffee · Fast Food & Snacks · Fruits & Vegetables |
-| 🏠 Daily Life & Home | Home & Rooms · Pets · City & Streets · Cars & Transport · Shopping & Objects |
+| 🌿 Nature | Landscapes & Mountains · Beach & Sea · Plants & Flowers · Wild Animals & Birds · Sky & Sunsets · Other |
+| 🎉 Friends, Events & Family | Selfies & Portraits · Group Photos · Parties & Celebrations · Weddings & Ceremonies · Family Moments · Other |
+| 📚 Study / School & Homework | Maths · Languages · Science · Coding / Computer Science · Other |
+| 🍔 Food & Drinks | Meals & Dishes · Desserts & Sweets · Drinks & Coffee · Fast Food & Snacks · Fruits & Vegetables · Other |
+| 🏠 Daily Life & Home | Home & Rooms · Pets · City & Streets · Cars & Transport · Shopping & Objects · Other |
+
+Every category ends with an **Other** bucket. The AI never picks "Other" on its own — it's there for you to move photos into, and it's where photos land if the AI can't process them.
 
 Want different mini-categories? Edit `js/categories.js` — each one is just a name plus a couple of English sentences describing what belongs in it.
 

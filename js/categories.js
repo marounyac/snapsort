@@ -57,25 +57,21 @@
     {
       id: 'study', name: 'Study / School & Homework', emoji: '📚', color: '#60a5fa',
       minis: [
-        { id: 'notes', name: 'Handwritten Notes', emoji: '✍️', prompts: [
-          'a photo of handwritten notes on paper',
-          'a photo of a notebook page with handwriting',
+        { id: 'maths', name: 'Maths', emoji: '➗', prompts: [
+          'a photo of math homework with equations and calculations',
+          'a page of mathematics exercises with numbers and formulas',
         ]},
-        { id: 'books', name: 'Books & Textbooks', emoji: '📖', prompts: [
-          'a photo of a textbook page with printed text',
-          'a photo of books or an open book',
+        { id: 'languages', name: 'Languages', emoji: '🔤', prompts: [
+          'a photo of language learning notes with vocabulary words',
+          'a page of grammar exercises or foreign language text',
         ]},
-        { id: 'documents', name: 'Documents & Printouts', emoji: '📄', prompts: [
-          'a photo of a printed document or worksheet',
-          'a scan of an official paper or form',
+        { id: 'science', name: 'Science', emoji: '🔬', prompts: [
+          'a photo of science study material with diagrams of biology, chemistry or physics',
+          'a page of science notes with a lab experiment or scientific diagram',
         ]},
-        { id: 'boards', name: 'Whiteboards & Blackboards', emoji: '🧑‍🏫', prompts: [
-          'a photo of a whiteboard with writing or diagrams',
-          'a photo of a classroom blackboard with chalk writing',
-        ]},
-        { id: 'screens', name: 'Screens & Slides', emoji: '💻', prompts: [
-          'a screenshot of a phone or computer screen',
-          'a photo of a presentation slide on a screen or projector',
+        { id: 'coding', name: 'Coding / Computer Science', emoji: '💻', prompts: [
+          'a computer screen showing programming code',
+          'a photo of source code in a code editor or terminal',
         ]},
       ],
     },
@@ -131,6 +127,25 @@
     },
   ];
 
+  // Every main category gets an "Other" mini-category as its LAST option
+  // (skipped if a list already defines one). "Other" has no prompts: the AI
+  // never auto-picks it — it exists for manual moves and as a safe fallback.
+  for (const m of MAINS) {
+    if (!m.minis.some((mini) => mini.name.toLowerCase() === 'other')) {
+      m.minis.push({ id: m.id + '_other', name: 'Other', emoji: '🗂️', prompts: [] });
+    }
+  }
+
+  // Mini-categories that were removed; photos saved under them are migrated
+  // at startup (see boot() in app.js).
+  const LEGACY = {
+    notes: 'study_other',
+    books: 'study_other',
+    documents: 'study_other',
+    boards: 'study_other',
+    screens: 'study_other',
+  };
+
   const byMini = {};
   const mainById = {};
   for (const m of MAINS) {
@@ -141,10 +156,13 @@
   }
 
   window.CATS = {
-    version: 'v1', // bump when prompts change so cached label embeddings recompute
+    version: 'v2', // bump when prompts change so cached label embeddings recompute
     mains: MAINS,
     byMini,
     mainById,
     miniOrder: Object.keys(byMini),
+    // Only minis with prompts participate in AI matching.
+    aiMiniIds: Object.keys(byMini).filter((id) => byMini[id].prompts.length > 0),
+    legacy: LEGACY,
   };
 })();

@@ -70,14 +70,14 @@
     try {
       const saved = await DB.getMeta(EMBED_KEY);
       if (saved && saved.mat && Array.isArray(saved.miniIds) &&
-          saved.miniIds.join() === CATS.miniOrder.join()) {
+          saved.miniIds.join() === CATS.aiMiniIds.join()) {
         return { miniIds: saved.miniIds, dim: saved.dim, mat: new Float32Array(saved.mat) };
       }
     } catch (e) { /* recompute below */ }
 
     const prompts = [];
     const owners = [];
-    for (const miniId of CATS.miniOrder) {
+    for (const miniId of CATS.aiMiniIds) {
       for (const p of CATS.byMini[miniId].prompts) { prompts.push(p); owners.push(miniId); }
     }
 
@@ -93,8 +93,8 @@
     const raw = text_embeds.data;
 
     // Normalize each prompt embedding, average per mini-category, re-normalize.
-    const rowOf = new Map(CATS.miniOrder.map((id, i) => [id, i]));
-    const mat = new Float32Array(CATS.miniOrder.length * dim);
+    const rowOf = new Map(CATS.aiMiniIds.map((id, i) => [id, i]));
+    const mat = new Float32Array(CATS.aiMiniIds.length * dim);
     for (let i = 0; i < n; i++) {
       const off = i * dim;
       let norm = 0;
@@ -103,7 +103,7 @@
       const roff = rowOf.get(owners[i]) * dim;
       for (let j = 0; j < dim; j++) mat[roff + j] += raw[off + j] / norm;
     }
-    for (let r = 0; r < CATS.miniOrder.length; r++) {
+    for (let r = 0; r < CATS.aiMiniIds.length; r++) {
       const roff = r * dim;
       let norm = 0;
       for (let j = 0; j < dim; j++) norm += mat[roff + j] * mat[roff + j];
@@ -112,11 +112,11 @@
     }
 
     try {
-      await DB.setMeta({ key: EMBED_KEY, miniIds: CATS.miniOrder.slice(), dim, mat: mat.buffer.slice(0) });
+      await DB.setMeta({ key: EMBED_KEY, miniIds: CATS.aiMiniIds.slice(), dim, mat: mat.buffer.slice(0) });
     } catch (e) { /* fine — recompute next session */ }
     try { if (textModel.dispose) await textModel.dispose(); } catch (e) { /* ignore */ }
 
-    return { miniIds: CATS.miniOrder.slice(), dim, mat };
+    return { miniIds: CATS.aiMiniIds.slice(), dim, mat };
   }
 
   async function init(onProgress) {
