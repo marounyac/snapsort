@@ -78,7 +78,12 @@
 
   function sheetOpen() { return !sheetHost.hidden; }
 
+  let sheetCloseTimer = null;
+
   function openSheet(node, onClose) {
+    // A sheet closed moments ago may still have its delayed cleanup pending —
+    // cancel it so it can't wipe the sheet we're about to open.
+    if (sheetCloseTimer) { clearTimeout(sheetCloseTimer); sheetCloseTimer = null; }
     if (sheetOpen()) closeSheet(true);
     sheetOnClose = onClose || null;
     sheetResult = undefined;
@@ -97,8 +102,8 @@
     const cb = sheetOnClose;
     sheetOnClose = null;
     sheetHost.classList.remove('open');
-    const finish = () => { sheetHost.hidden = true; sheetHost.innerHTML = ''; };
-    if (immediate) finish(); else setTimeout(finish, 220);
+    const finish = () => { sheetCloseTimer = null; sheetHost.hidden = true; sheetHost.innerHTML = ''; };
+    if (immediate) finish(); else sheetCloseTimer = setTimeout(finish, 220);
     if (cb) cb(sheetResult);
   }
 
@@ -343,82 +348,31 @@
       return;
     }
     if (cancelled) { App.toast('Import cancelled'); return; }
-    proceeding = true;
-    startAiReview(items);
-  }
 
-  // One review sheet per photo: the AI's pick pre-fills the picker and the
-  // user accepts or overrides — nothing is ever submitted silently.
-  function startAiReview(items) {
+    // Save everything with the AI's pick right away — the Move button is
+    // there for corrections. Photos the AI couldn't read go to Daily > Other.
     const readable = items.filter((it) => !it.unreadable);
     const bad = items.length - readable.length;
     if (bad) App.toast('⚠️ ' + bad + ' photo' + (bad > 1 ? 's' : '') + " couldn't be read (unsupported format)");
-    if (!readable.length) return;
-    let idx = 0, added = 0, proceeding = false, thumbUrl = null;
-
-    const onSheetClosed = () => {
-      if (thumbUrl) { URL.revokeObjectURL(thumbUrl); thumbUrl = null; }
-      if (proceeding) { proceeding = false; return; }
-      const remaining = readable.length - idx;
-      if (remaining > 0) App.toast('Import stopped — ' + remaining + ' photo' + (remaining > 1 ? 's' : '') + ' not added');
-    };
-
-    const showNext = () => {
-      if (idx >= readable.length) {
-        proceeding = true;
-        closeSheet();
-        if (added) App.toast('✨ Added ' + added + ' photo' + (added > 1 ? 's' : ''));
-        return;
+    let added = 0;
+    for (const it of readable) {
+      const miniId = it.sug || 'daily_other';
+      try {
+        const rec = newRecord(it.file, it.t);
+        rec.miniCat = miniId;
+        rec.mainCat = CATS.byMini[miniId].mainId;
+        if (it.top) rec.aiTop = it.top;
+        await DB.putPhoto(rec);
+        photos.unshift(rec);
+        added++;
+      } catch (e) {
+        console.error('Could not save', it.file.name, e);
       }
-      const it = readable[idx];
-      const box = h('div', 'sheet-content');
-      box.append(h('h3', 'sheet-title', readable.length > 1 ? 'Photo ' + (idx + 1) + ' of ' + readable.length : '✨ AI suggestion'));
-      const img = h('img', 'review-thumb');
-      thumbUrl = URL.createObjectURL(it.t.blob);
-      img.src = thumbUrl;
-      img.alt = it.file.name || 'photo';
-      box.append(img);
-      if (it.sug) {
-        const mini = CATS.byMini[it.sug], main = CATS.mainById[mini.mainId];
-        box.append(h('p', 'review-sug', '✨ AI suggests: ' + main.emoji + ' ' + main.name + ' ▸ ' + mini.emoji + ' ' + mini.name));
-      } else {
-        box.append(h('p', 'review-sug warn', "⚠️ The AI couldn't decide on this one — pick a category yourself."));
-      }
-      const err = h('p', 'pick-err', 'Please pick a category first.');
-      err.hidden = true;
-      const picker = buildPicker(it.sug || null, () => { err.hidden = true; });
-      box.append(picker.el, err);
-      const row = h('div', 'sheet-actions');
-      const skip = h('button', 'btn ghost', "Don't add");
-      const accept = h('button', 'btn primary', it.sug ? 'Accept' : 'Add photo');
-      skip.onclick = () => { idx++; proceeding = true; showNext(); };
-      accept.onclick = async () => {
-        const miniId = picker.get();
-        if (!miniId) { err.hidden = false; return; }
-        accept.disabled = true; skip.disabled = true;
-        accept.textContent = 'Adding…';
-        try {
-          const rec = newRecord(it.file, it.t);
-          rec.miniCat = miniId;
-          rec.mainCat = CATS.byMini[miniId].mainId;
-          if (it.top) rec.aiTop = it.top;
-          await DB.putPhoto(rec);
-          photos.unshift(rec);
-          added++;
-          refreshSoft();
-        } catch (e) {
-          console.error(e);
-          App.toast("⚠️ Couldn't save that photo");
-        }
-        idx++;
-        proceeding = true;
-        showNext();
-      };
-      row.append(skip, accept);
-      box.append(row);
-      openSheet(box, onSheetClosed);
-    };
-    showNext();
+    }
+    refreshSoft();
+    proceeding = true;
+    closeSheet();
+    if (added) App.toast('✨ Sorted ' + added + ' photo' + (added > 1 ? 's' : ''));
   }
 
   fileInput.addEventListener('change', () => {

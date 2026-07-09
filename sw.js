@@ -1,7 +1,7 @@
 // SnapSort service worker — caches the app shell and CDN library so the app
 // works offline once hosted. AI model files are cached separately by
 // transformers.js in the browser cache.
-const VERSION = 'snapsort-v8';
+const VERSION = 'snapsort-v9';
 const CDN_CACHE = 'snapsort-cdn';
 const SHELL = [
   './',
