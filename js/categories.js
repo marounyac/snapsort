@@ -132,7 +132,10 @@
   // never auto-picks it — it exists for manual moves and as a safe fallback.
   for (const m of MAINS) {
     if (!m.minis.some((mini) => mini.name.toLowerCase() === 'other')) {
-      m.minis.push({ id: m.id + '_other', name: 'Other', emoji: '🗂️', prompts: [] });
+      m.minis.push({
+        id: m.id + '_other', name: 'Other', emoji: '🗂️',
+        hint: 'Doesn’t fit any of the above', prompts: [],
+      });
     }
   }
 

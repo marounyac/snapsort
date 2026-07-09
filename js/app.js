@@ -340,7 +340,12 @@
       for (const mini of main.minis) {
         const count = photos.filter((p) => p.miniCat === mini.id).length;
         const mbtn = h('button', 'mini-btn' + (rec.miniCat === mini.id ? ' current' : ''));
-        mbtn.append(h('span', '', mini.emoji + ' ' + mini.name), h('span', 'mini-count', String(count)));
+        const label = h('span', '', mini.emoji + ' ' + mini.name);
+        if (mini.hint) {
+          label.append(h('span', 'mini-hint', ' — ' + mini.hint.toLowerCase()));
+          mbtn.title = mini.name + ' — ' + mini.hint;
+        }
+        mbtn.append(label, h('span', 'mini-count', String(count)));
         mbtn.onclick = async () => {
           rec.mainCat = main.id;
           rec.miniCat = mini.id;
