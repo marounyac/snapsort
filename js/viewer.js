@@ -78,13 +78,14 @@
     if (!rec) return;
     vCount.textContent = (idx + 1) + ' / ' + ids.length;
     vChip.className = 'vchip';
+    vChip.style.removeProperty('--tint');
     if (rec.miniCat && CATS.byMini[rec.miniCat]) {
       const mini = CATS.byMini[rec.miniCat];
       const main = CATS.mainById[mini.mainId];
       vChip.textContent = main.emoji + ' ' + mini.name;
-      vChip.classList.add('tint-' + main.id);
+      vChip.style.setProperty('--tint', main.color);
     } else {
-      vChip.textContent = '⏳ Sorting…';
+      vChip.textContent = rec.status === 'pending' ? '⏳ Sorting…' : '🗂️ Uncategorised';
     }
     vPrevBtn.disabled = idx === 0;
     vNextBtn.disabled = idx === ids.length - 1;

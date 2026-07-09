@@ -17,6 +17,7 @@
   const urls = new Map();     // id -> { thumb, full } object URLs
   let sorting = false;
   let modelLoadedOnce = false;
+  let customCats = [];        // raw user categories, persisted as meta 'customCats'
 
   const App = {};
   window.App = App;
@@ -553,7 +554,7 @@
       const main = CATS.mainById[mini.mainId];
       addRow('Category', main.emoji + ' ' + main.name + ' ▸ ' + mini.emoji + ' ' + mini.name);
     } else {
-      addRow('Category', '⏳ Waiting for AI…');
+      addRow('Category', rec.status === 'pending' ? '⏳ Waiting for AI…' : '🗂️ Uncategorised');
     }
     box.append(dl);
     if (rec.aiTop && rec.aiTop.length) {
@@ -622,6 +623,7 @@
   function route() {
     const parts = location.hash.slice(1).split('/').filter(Boolean);
     if (parts[0] === 'all') return { name: 'all' };
+    if (parts[0] === 'uncat') return { name: 'uncat' };
     if (parts[0] === 'cat' && CATS.mainById[parts[1]]) return { name: 'cat', main: parts[1] };
     if (parts[0] === 'mini' && CATS.byMini[parts[1]]) return { name: 'mini', mini: parts[1] };
     return { name: 'home' };
@@ -691,6 +693,9 @@
       btns.append(btn, camBtn);
       hero.append(btns);
       hero.append(h('p', 'hero-note', '🔒 Private: photos never leave your device.\n📥 The first import downloads the AI model (~150 MB, one time) — Wi-Fi recommended.'));
+      const manage = h('button', 'btn ghost manage-btn', '🗂️ Manage categories');
+      manage.onclick = () => openManageSheet();
+      hero.append(manage);
       frag.append(hero);
       view.replaceChildren(frag);
       return;
@@ -704,7 +709,8 @@
     const cards = h('div', 'cards');
     for (const main of CATS.mains) {
       const inMain = photosInMain(main.id);
-      const card = h('button', 'card tint-' + main.id);
+      const card = h('button', 'card');
+      card.style.setProperty('--tint', main.color);
       const head = h('div', 'card-head');
       head.append(h('span', 'card-emoji', main.emoji), h('span', 'card-name', main.name), h('span', 'card-count', String(inMain.length)));
       card.append(head);
@@ -726,6 +732,18 @@
       cards.append(card);
     }
     frag.append(cards);
+
+    const uncat = uncategorised();
+    if (uncat.length) {
+      const bar = h('button', 'allbar');
+      bar.append(h('span', '', '🗂️ Uncategorised'), h('span', 'allbar-count', uncat.length + ' ›'));
+      bar.onclick = () => { location.hash = '#uncat'; };
+      frag.append(bar);
+    }
+
+    const manage = h('button', 'btn ghost big wide manage-btn', '🗂️ Manage categories');
+    manage.onclick = () => openManageSheet();
+    frag.append(manage);
 
     const exp = h('button', 'btn ghost big wide export-btn', '⬇️ Download all photos (' + photos.length + ')');
     exp.disabled = !photos.length;
@@ -773,6 +791,208 @@
       App.toast('⚠️ Export failed — nothing was downloaded.' + (e && e.message ? ' ' + e.message : ''));
     }
   };
+
+  // ---------- custom categories ----------
+
+  const uncategorised = () =>
+    sorted(photos.filter((p) => p.status !== 'pending' && !(p.miniCat && CATS.byMini[p.miniCat])));
+
+  async function saveCustomCats() {
+    await DB.setMeta({ key: 'customCats', mains: customCats });
+    CATS.rebuild(customCats);
+  }
+
+  // null when the name is fine, otherwise the message to show inline.
+  function catNameError(name, takenNames) {
+    const t = name.trim();
+    if (!t) return 'Please enter a name.';
+    if (t.length > 30) return 'Keep it under 30 characters.';
+    if (t.toLowerCase() === 'other') return '“Other” is added automatically to every category.';
+    if (takenNames.some((n) => n.trim().toLowerCase() === t.toLowerCase())) return 'That name is already used.';
+    return null;
+  }
+
+  function iconBtn(glyph, title, onClick) {
+    const b = h('button', 'icon-btn man-btn', glyph);
+    b.type = 'button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.onclick = onClick;
+    return b;
+  }
+
+  // Name + optional description form, used for both creating and renaming.
+  function openCatFormSheet(opts) {
+    const box = h('div', 'sheet-content');
+    box.append(h('h3', 'sheet-title', opts.title));
+    const nameIn = h('input', 'auth-input');
+    nameIn.maxLength = 30;
+    nameIn.placeholder = opts.namePlaceholder || 'e.g. Sports';
+    nameIn.value = opts.name || '';
+    const descIn = h('input', 'auth-input');
+    descIn.maxLength = 80;
+    descIn.placeholder = opts.descPlaceholder || 'e.g. football matches, gyms and stadiums';
+    descIn.value = opts.desc || '';
+    const err = h('p', 'pick-err');
+    err.hidden = true;
+    nameIn.addEventListener('input', () => { err.hidden = true; });
+    const row = h('div', 'sheet-actions');
+    const back = h('button', 'btn ghost', 'Back');
+    const save = h('button', 'btn primary', 'Save');
+    back.onclick = () => openManageSheet();
+    save.onclick = async () => {
+      const msg = catNameError(nameIn.value, opts.taken);
+      if (msg) { err.textContent = msg; err.hidden = false; nameIn.focus(); return; }
+      save.disabled = true;
+      save.textContent = 'Saving…';
+      await opts.onSave(nameIn.value.trim(), descIn.value.trim());
+      openManageSheet();
+    };
+    const onEnter = (e) => { if (e.key === 'Enter') save.click(); };
+    nameIn.addEventListener('keydown', onEnter);
+    descIn.addEventListener('keydown', onEnter);
+    row.append(back, save);
+    box.append(
+      h('label', 'form-lab', 'Name'), nameIn,
+      h('label', 'form-lab', 'What belongs here? (optional — helps the AI)'), descIn,
+      err, row,
+    );
+    openSheet(box);
+    setTimeout(() => nameIn.focus(), 250);
+  }
+
+  function renameMain(cm) {
+    openCatFormSheet({
+      title: 'Rename category',
+      name: cm.name, desc: cm.desc || '',
+      taken: CATS.mains.filter((m) => m.id !== cm.id).map((m) => m.name),
+      onSave: async (name, desc) => {
+        cm.name = name; cm.desc = desc;
+        await saveCustomCats();
+        refreshSoft();
+      },
+    });
+  }
+
+  function addMini(cm) {
+    openCatFormSheet({
+      title: 'New sub-category in ' + cm.name,
+      taken: cm.minis.map((m) => m.name),
+      onSave: async (name, desc) => {
+        cm.minis.push({ id: 'c_' + uid(), name, desc });
+        await saveCustomCats();
+        refreshSoft();
+        App.toast('🏷️ "' + name + '" added — the AI can now sort photos into it');
+      },
+    });
+  }
+
+  function renameMini(cm, miniId) {
+    const raw = cm.minis.find((m) => m.id === miniId);
+    if (!raw) return;
+    openCatFormSheet({
+      title: 'Rename sub-category',
+      name: raw.name, desc: raw.desc || '',
+      taken: cm.minis.filter((m) => m.id !== miniId).map((m) => m.name),
+      onSave: async (name, desc) => {
+        raw.name = name; raw.desc = desc;
+        await saveCustomCats();
+        refreshSoft();
+      },
+    });
+  }
+
+  async function deleteMain(cm) {
+    const affected = photos.filter((p) => p.mainCat === cm.id);
+    const q = affected.length
+      ? 'Delete "' + cm.name + '"? Its ' + affected.length + ' photo' + (affected.length > 1 ? 's' : '') + ' will move to Uncategorised (no photo is deleted).'
+      : 'Delete the category "' + cm.name + '"?';
+    if (!(await App.confirm(q, 'Delete'))) { openManageSheet(); return; }
+    for (const p of affected) {
+      p.mainCat = null;
+      p.miniCat = null;
+      try { await DB.putPhoto(p); } catch (e) { console.error(e); }
+    }
+    customCats = customCats.filter((c) => c.id !== cm.id);
+    await saveCustomCats();
+    refreshSoft();
+    if (affected.length) App.toast('Moved ' + affected.length + ' photo' + (affected.length > 1 ? 's' : '') + ' to 🗂️ Uncategorised');
+    openManageSheet();
+  }
+
+  async function deleteMini(cm, miniId) {
+    const raw = cm.minis.find((m) => m.id === miniId);
+    if (!raw) return;
+    const affected = photos.filter((p) => p.miniCat === miniId);
+    const q = affected.length
+      ? 'Delete "' + raw.name + '"? Its ' + affected.length + ' photo' + (affected.length > 1 ? 's' : '') + ' will move to ' + cm.name + ' ▸ Other.'
+      : 'Delete the sub-category "' + raw.name + '"?';
+    if (!(await App.confirm(q, 'Delete'))) { openManageSheet(); return; }
+    for (const p of affected) {
+      p.miniCat = cm.id + '_other';
+      p.mainCat = cm.id;
+      try { await DB.putPhoto(p); } catch (e) { console.error(e); }
+    }
+    cm.minis = cm.minis.filter((m) => m.id !== miniId);
+    await saveCustomCats();
+    refreshSoft();
+    openManageSheet();
+  }
+
+  function openManageSheet() {
+    const box = h('div', 'sheet-content');
+    box.append(h('h3', 'sheet-title', '🗂️ Manage categories'));
+    box.append(h('p', 'sheet-msg dim', customCats.length
+      ? 'Your categories — the AI sorts into them just like the built-in ones.'
+      : 'Create your own categories and the AI will sort photos into them. The built-in categories stay as they are.'));
+
+    const list = h('div', 'man-list');
+    for (const cm of customCats) {
+      const main = CATS.mainById[cm.id];
+      const wrap = h('div', 'man-main');
+      const head = h('div', 'man-head');
+      head.append(h('span', 'man-name', main.emoji + ' ' + cm.name));
+      head.append(
+        iconBtn('✏️', 'Rename category', () => renameMain(cm)),
+        iconBtn('➕', 'Add sub-category', () => addMini(cm)),
+        iconBtn('🗑️', 'Delete category', () => deleteMain(cm)),
+      );
+      wrap.append(head);
+      if (cm.desc) wrap.append(h('p', 'man-desc', cm.desc));
+      for (const mini of main.minis) {
+        const mrow = h('div', 'man-mini');
+        const label = h('span', 'man-mini-name', mini.emoji + ' ' + mini.name);
+        if (mini.isOther) {
+          label.append(h('span', 'mini-hint', ' — added automatically'));
+          mrow.append(label);
+        } else {
+          if (mini.desc) label.append(h('span', 'mini-hint', ' — ' + mini.desc));
+          mrow.append(
+            label,
+            iconBtn('✏️', 'Rename sub-category', () => renameMini(cm, mini.id)),
+            iconBtn('🗑️', 'Delete sub-category', () => deleteMini(cm, mini.id)),
+          );
+        }
+        wrap.append(mrow);
+      }
+      list.append(wrap);
+    }
+    box.append(list);
+
+    const add = h('button', 'btn primary big wide', '＋ New category');
+    add.onclick = () => openCatFormSheet({
+      title: 'New category',
+      taken: CATS.mains.map((m) => m.name),
+      onSave: async (name, desc) => {
+        customCats.push({ id: 'c_' + uid(), name, desc, minis: [] });
+        await saveCustomCats();
+        refreshSoft();
+        App.toast('📁 "' + name + '" created — now add sub-categories to it');
+      },
+    });
+    box.append(add);
+    openSheet(box);
+  }
 
   function renderCat(mainId) {
     const main = CATS.mainById[mainId];
@@ -824,11 +1044,21 @@
     view.replaceChildren(frag);
   }
 
+  function renderUncat() {
+    setTopbar('🗂️ Uncategorised');
+    const list = uncategorised();
+    const frag = document.createDocumentFragment();
+    if (list.length) frag.append(grid(list, false));
+    else frag.append(emptyNote('Nothing here — every photo has a category. Photos land here when their category is deleted.'));
+    view.replaceChildren(frag);
+  }
+
   function render() {
     const r = route();
     if (r.name === 'cat') renderCat(r.main);
     else if (r.name === 'mini') renderMini(r.mini);
     else if (r.name === 'all') renderAll();
+    else if (r.name === 'uncat') renderUncat();
     else renderHome();
   }
 
@@ -849,14 +1079,21 @@
       return;
     }
     photos.sort((a, b) => b.addedAt - a.addedAt);
-    // Migrate photos saved under mini-categories that no longer exist
-    // (e.g. the old Study sub-categories) to their replacement, or to the
-    // main category's "Other".
+    // The user's own categories are merged into CATS before anything renders.
+    try {
+      const saved = await DB.getMeta('customCats');
+      if (saved && Array.isArray(saved.mains)) customCats = saved.mains;
+    } catch (e) { /* built-ins only */ }
+    CATS.rebuild(customCats);
+    // Migrate photos saved under mini-categories that no longer exist:
+    // renamed built-ins map via CATS.legacy, otherwise the photo falls to its
+    // main category's "Other" — or to Uncategorised if the main is gone too.
     for (const rec of photos) {
       if (rec.miniCat && !CATS.byMini[rec.miniCat]) {
-        const fallback = CATS.mainById[rec.mainCat] ? rec.mainCat + '_other' : 'daily_other';
-        rec.miniCat = CATS.legacy[rec.miniCat] || fallback;
-        rec.mainCat = CATS.byMini[rec.miniCat].mainId;
+        if (CATS.legacy[rec.miniCat]) rec.miniCat = CATS.legacy[rec.miniCat];
+        else if (CATS.mainById[rec.mainCat]) rec.miniCat = rec.mainCat + '_other';
+        else rec.miniCat = null;
+        rec.mainCat = rec.miniCat ? CATS.byMini[rec.miniCat].mainId : null;
         try { await DB.putPhoto(rec); } catch (e) { /* keep the in-memory fix */ }
       }
     }

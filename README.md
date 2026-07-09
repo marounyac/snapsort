@@ -32,7 +32,14 @@ To use it on your **phone**, the site needs to be hosted online (for example wit
 
 Every category ends with an **Other** bucket. The AI never picks "Other" on its own — it's there for you to move photos into, and it's where photos land if the AI can't process them.
 
-Want different mini-categories? Edit `js/categories.js` — each one is just a name plus a couple of English sentences describing what belongs in it.
+### Your own categories
+
+Tap **🗂️ Manage categories** on the home screen to create your own:
+
+- Give a category a **name** and (optionally) a short description of **what belongs here** — the description helps the AI sort more accurately.
+- Add **sub-categories** one at a time, each with its own optional description. **Other** is added automatically as the last sub-category (you can't remove it).
+- **Rename** or **delete** anything you created; built-in categories stay as they are. Deleting a category never deletes photos — they move to **Uncategorised** (or to the category's **Other** when you delete just a sub-category), and you can re-file them with **Move**.
+- The AI immediately starts sorting into your categories: on the next AI import it re-learns the current list, names and descriptions included.
 
 ## Tech
 

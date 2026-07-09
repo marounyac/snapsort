@@ -6,13 +6,14 @@
   const CDN_URL = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
   const MODEL_ID = 'Xenova/clip-vit-base-patch32';
   const LOGIT_SCALE = 100; // CLIP's trained temperature
-  const EMBED_KEY = 'labelEmbeds:' + CATS.version;
+  const EMBED_KEY = 'labelEmbeds:v3';
 
   let TF = null;
   let processor = null;
   let visionModel = null;
-  let labels = null; // { miniIds: string[], dim: number, mat: Float32Array }
-  let readyPromise = null;
+  let labels = null; // { sig, miniIds: string[], dim: number, mat: Float32Array }
+  let modelPromise = null;
+  let labelsPromise = null; // tagged with .sig — redone when categories change
 
   async function loadLibrary() {
     const mod = await import(CDN_URL);
@@ -66,12 +67,11 @@
     };
   }
 
-  async function loadLabelEmbeds(agg) {
+  async function loadLabelEmbeds(agg, sig) {
     try {
       const saved = await DB.getMeta(EMBED_KEY);
-      if (saved && saved.mat && Array.isArray(saved.miniIds) &&
-          saved.miniIds.join() === CATS.aiMiniIds.join()) {
-        return { miniIds: saved.miniIds, dim: saved.dim, mat: new Float32Array(saved.mat) };
+      if (saved && saved.mat && Array.isArray(saved.miniIds) && saved.sig === sig) {
+        return { sig, miniIds: saved.miniIds, dim: saved.dim, mat: new Float32Array(saved.mat) };
       }
     } catch (e) { /* recompute below */ }
 
@@ -112,14 +112,14 @@
     }
 
     try {
-      await DB.setMeta({ key: EMBED_KEY, miniIds: CATS.aiMiniIds.slice(), dim, mat: mat.buffer.slice(0) });
+      await DB.setMeta({ key: EMBED_KEY, sig, miniIds: CATS.aiMiniIds.slice(), dim, mat: mat.buffer.slice(0) });
     } catch (e) { /* fine — recompute next session */ }
     try { if (textModel.dispose) await textModel.dispose(); } catch (e) { /* ignore */ }
 
-    return { miniIds: CATS.aiMiniIds.slice(), dim, mat };
+    return { sig, miniIds: CATS.aiMiniIds.slice(), dim, mat };
   }
 
-  async function init(onProgress) {
+  async function initModel(onProgress) {
     const report = (pct) => { if (onProgress) onProgress(pct); };
     report(0);
     TF = await loadLibrary();
@@ -130,17 +130,32 @@
     ]);
     processor = loaded[0];
     visionModel = loaded[1];
-    labels = await loadLabelEmbeds(agg);
-    report(100);
+  }
+
+  // Label embeddings are keyed by CATS.aiSig(): when the user adds, renames,
+  // or deletes a category they are recomputed on the next AI import.
+  function ensureLabels(onProgress) {
+    const sig = CATS.aiSig();
+    if (!labelsPromise || labelsPromise.sig !== sig) {
+      const agg = makeProgressAggregator(onProgress);
+      const p = loadLabelEmbeds(agg, sig).then((l) => { labels = l; });
+      p.sig = sig;
+      p.catch(() => { if (labelsPromise === p) labelsPromise = null; });
+      labelsPromise = p;
+    }
+    return labelsPromise;
   }
 
   window.Classifier = {
-    // Loads library + model (~150 MB, first time only) and label embeddings.
+    // Loads library + model (~150 MB, first time only) and label embeddings
+    // for the CURRENT category list.
     ensureReady(onProgress) {
-      if (!readyPromise) {
-        readyPromise = init(onProgress).catch((e) => { readyPromise = null; throw e; });
+      if (!modelPromise) {
+        modelPromise = initModel(onProgress).catch((e) => { modelPromise = null; throw e; });
       }
-      return readyPromise;
+      return modelPromise
+        .then(() => ensureLabels(onProgress))
+        .then(() => { if (onProgress) onProgress(100); });
     },
 
     isReady() { return !!(visionModel && labels); },

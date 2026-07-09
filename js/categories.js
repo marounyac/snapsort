@@ -1,9 +1,10 @@
 // SnapSort — category taxonomy.
-// 5 main categories, each with 5 mini-categories. Every mini-category has
-// CLIP text prompts; the AI matches each photo against ALL prompts and files
-// the photo under the best-matching mini-category.
+// Built-in main categories live here; the user's own categories are stored in
+// IndexedDB (meta key 'customCats') and merged in via CATS.rebuild(). Every
+// mini-category ends up with CLIP text prompts; the AI matches each photo
+// against ALL prompts and files the photo under the best-matching mini.
 (() => {
-  const MAINS = [
+  const BUILTIN = [
     {
       id: 'nature', name: 'Nature', emoji: '🌿', color: '#34d399',
       minis: [
@@ -127,16 +128,28 @@
     },
   ];
 
-  // Every main category gets an "Other" mini-category as its LAST option
-  // (skipped if a list already defines one). "Other" has no prompts: the AI
-  // never auto-picks it — it exists for manual moves and as a safe fallback.
-  for (const m of MAINS) {
-    if (!m.minis.some((mini) => mini.name.toLowerCase() === 'other')) {
-      m.minis.push({
-        id: m.id + '_other', name: 'Other', emoji: '🗂️',
-        hint: 'Doesn’t fit any of the above', prompts: [],
-      });
-    }
+  const OTHER_HINT = 'Doesn’t fit any of the above';
+
+  // "Other" is added automatically as the LAST mini of every main category.
+  // It has no prompts: the AI never auto-picks it — it exists for manual
+  // moves and as a safe fallback. Users can't create, rename, or delete it.
+  function otherMini(mainId) {
+    return { id: mainId + '_other', name: 'Other', emoji: '🗂️', hint: OTHER_HINT, prompts: [], isOther: true };
+  }
+
+  for (const m of BUILTIN) m.minis.push(otherMini(m.id));
+
+  // Colors cycled through for user-created categories.
+  const CUSTOM_COLORS = ['#f97316', '#22d3ee', '#e879f9', '#84cc16', '#f43f5e', '#38bdf8'];
+
+  // CLIP prompts for a user-created mini-category, built from its name, its
+  // optional description ("what belongs here"), and the parent category.
+  function promptsFor(miniName, miniDesc, mainName, mainDesc) {
+    const mini = String(miniName).toLowerCase();
+    const out = ['a photo of ' + mini];
+    if (miniDesc) out.push('a photo of ' + String(miniDesc).toLowerCase());
+    out.push('a photo of ' + mini + ', ' + String(mainDesc || mainName).toLowerCase());
+    return out;
   }
 
   // Mini-categories that were removed; photos saved under them are migrated
@@ -149,23 +162,51 @@
     screens: 'study_other',
   };
 
-  const byMini = {};
-  const mainById = {};
-  for (const m of MAINS) {
-    mainById[m.id] = m;
-    for (const mini of m.minis) {
-      byMini[mini.id] = Object.assign({}, mini, { mainId: m.id });
-    }
-  }
-
   window.CATS = {
-    version: 'v2', // bump when prompts change so cached label embeddings recompute
-    mains: MAINS,
-    byMini,
-    mainById,
-    miniOrder: Object.keys(byMini),
-    // Only minis with prompts participate in AI matching.
-    aiMiniIds: Object.keys(byMini).filter((id) => byMini[id].prompts.length > 0),
+    version: 'v3', // bump when built-in prompts change
     legacy: LEGACY,
+
+    // Merges the user's categories (raw records from IndexedDB:
+    // [{ id, name, desc?, minis: [{ id, name, desc? }] }]) with the built-ins
+    // and rebuilds every lookup table. Call after any category change.
+    rebuild(customMains) {
+      const customs = (customMains || []).map((cm, i) => {
+        const main = {
+          id: cm.id, name: cm.name, desc: cm.desc || '',
+          emoji: '📁', color: CUSTOM_COLORS[i % CUSTOM_COLORS.length],
+          custom: true,
+          minis: (cm.minis || []).map((mini) => ({
+            id: mini.id, name: mini.name, desc: mini.desc || '',
+            emoji: '🏷️', hint: mini.desc || '',
+            prompts: promptsFor(mini.name, mini.desc, cm.name, cm.desc),
+            custom: true,
+          })),
+        };
+        main.minis.push(Object.assign(otherMini(main.id), { custom: true }));
+        return main;
+      });
+
+      const mains = BUILTIN.concat(customs);
+      const byMini = {};
+      const mainById = {};
+      for (const m of mains) {
+        mainById[m.id] = m;
+        for (const mini of m.minis) byMini[mini.id] = Object.assign({}, mini, { mainId: m.id });
+      }
+      CATS.mains = mains;
+      CATS.byMini = byMini;
+      CATS.mainById = mainById;
+      CATS.miniOrder = Object.keys(byMini);
+      // Only minis with prompts participate in AI matching.
+      CATS.aiMiniIds = Object.keys(byMini).filter((id) => byMini[id].prompts.length > 0);
+    },
+
+    // Fingerprint of everything the AI matches against. When it changes,
+    // the classifier recomputes its cached label embeddings.
+    aiSig() {
+      return JSON.stringify(CATS.aiMiniIds.map((id) => [id, CATS.byMini[id].prompts]));
+    },
   };
+
+  CATS.rebuild([]);
 })();
