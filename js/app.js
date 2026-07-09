@@ -175,20 +175,23 @@
     }
   }
 
-  async function handleFiles(fileList) {
-    const files = Array.from(fileList || []).filter((f) => f.type && f.type.startsWith('image/'));
-    if (!files.length) { App.toast('No images found in that selection'); return; }
-    App.toast('Importing ' + files.length + ' photo' + (files.length > 1 ? 's' : '') + '…');
+  function newRecord(f, t) {
+    return {
+      id: uid(), name: f.name || 'photo', type: f.type, size: f.size,
+      addedAt: Date.now(), w: t.w, h: t.h,
+      blob: f, thumb: t.blob,
+      status: 'sorted', mainCat: null, miniCat: null, aiTop: null, edited: false,
+    };
+  }
+
+  async function importFiles(files, miniId) {
     let added = 0, failed = 0;
     for (const f of files) {
       try {
         const t = await makeThumb(f);
-        const rec = {
-          id: uid(), name: f.name || 'photo', type: f.type, size: f.size,
-          addedAt: Date.now(), w: t.w, h: t.h,
-          blob: f, thumb: t.blob,
-          status: 'pending', mainCat: null, miniCat: null, aiTop: null, edited: false,
-        };
+        const rec = newRecord(f, t);
+        rec.miniCat = miniId;
+        rec.mainCat = CATS.byMini[miniId].mainId;
         await DB.putPhoto(rec);
         photos.unshift(rec);
         added++;
@@ -199,7 +202,223 @@
     }
     if (failed) App.toast('⚠️ ' + failed + ' photo' + (failed > 1 ? 's' : '') + " couldn't be read (unsupported format)");
     refreshSoft();
-    if (added) runQueue();
+    return added;
+  }
+
+  // Nothing is saved until the user sets a category — either by picking one
+  // or by accepting/overriding the AI's suggestion.
+  function handleFiles(fileList) {
+    const files = Array.from(fileList || []).filter((f) => f.type && f.type.startsWith('image/'));
+    if (!files.length) { App.toast('No images found in that selection'); return; }
+    openSortChoiceSheet(files);
+  }
+
+  function openSortChoiceSheet(files) {
+    const n = files.length;
+    const box = h('div', 'sheet-content');
+    box.append(h('h3', 'sheet-title', 'Add ' + n + ' photo' + (n > 1 ? 's' : '')));
+    box.append(h('p', 'sheet-msg dim', 'Who should pick the category?'));
+    const me = h('button', 'choice-btn');
+    me.append(h('span', 'choice-emoji', '🖐️'), h('span', 'choice-label', 'Choose category myself'));
+    const ai = h('button', 'choice-btn');
+    ai.append(h('span', 'choice-emoji', '✨'), h('span', 'choice-label', 'Let AI choose'));
+    me.onclick = () => openManualPickSheet(files);
+    ai.onclick = () => runAiFlow(files);
+    box.append(me, ai);
+    openSheet(box);
+  }
+
+  // Main → mini category picker. onPick fires on every selection change;
+  // get() returns the selected miniId or null.
+  function buildPicker(preMiniId, onPick) {
+    let selMain = preMiniId ? CATS.byMini[preMiniId].mainId : null;
+    let selMini = preMiniId || null;
+    const el = h('div', 'pick-wrap');
+    const mainRow = h('div', 'pick-mains');
+    const miniList = h('div', 'pick-minis');
+    el.append(mainRow, miniList);
+
+    function renderMinis() {
+      miniList.innerHTML = '';
+      if (!selMain) return;
+      for (const mini of CATS.mainById[selMain].minis) {
+        const b = h('button', 'mini-btn' + (selMini === mini.id ? ' current' : ''));
+        b.type = 'button';
+        const label = h('span', '', mini.emoji + ' ' + mini.name);
+        if (mini.hint) {
+          label.append(h('span', 'mini-hint', ' — ' + mini.hint.toLowerCase()));
+          b.title = mini.name + ' — ' + mini.hint;
+        }
+        b.append(label);
+        b.onclick = () => { selMini = mini.id; renderMinis(); if (onPick) onPick(selMini); };
+        miniList.append(b);
+      }
+    }
+    function renderMains() {
+      mainRow.innerHTML = '';
+      for (const m of CATS.mains) {
+        const b = h('button', 'pick-main' + (selMain === m.id ? ' active' : ''), m.emoji + ' ' + m.name);
+        b.type = 'button';
+        b.onclick = () => {
+          selMain = m.id;
+          if (selMini && CATS.byMini[selMini].mainId !== m.id) selMini = null;
+          renderMains(); renderMinis();
+          if (onPick) onPick(selMini);
+        };
+        mainRow.append(b);
+      }
+    }
+    renderMains(); renderMinis();
+    return { el, get: () => selMini };
+  }
+
+  function openManualPickSheet(files) {
+    const n = files.length;
+    const box = h('div', 'sheet-content');
+    box.append(h('h3', 'sheet-title', 'Pick a category'));
+    if (n > 1) box.append(h('p', 'sheet-msg dim', 'All ' + n + ' photos will go to the category you pick — you can move any of them later.'));
+    const err = h('p', 'pick-err', 'Please pick a category first.');
+    err.hidden = true;
+    const picker = buildPicker(null, () => { err.hidden = true; });
+    const add = h('button', 'btn primary big wide', 'Add ' + n + ' photo' + (n > 1 ? 's' : ''));
+    add.onclick = async () => {
+      const miniId = picker.get();
+      if (!miniId) { err.hidden = false; return; }
+      add.disabled = true;
+      add.textContent = 'Adding…';
+      const added = await importFiles(files, miniId);
+      closeSheet();
+      if (added) {
+        const mini = CATS.byMini[miniId];
+        App.toast('Added ' + added + ' photo' + (added > 1 ? 's' : '') + ' to ' + mini.emoji + ' ' + mini.name);
+      }
+    };
+    box.append(picker.el, err, add);
+    openSheet(box);
+  }
+
+  async function runAiFlow(files) {
+    let cancelled = false, proceeding = false;
+    const box = h('div', 'sheet-content');
+    box.append(h('h3', 'sheet-title', '✨ Let AI choose'));
+    const msg = h('p', 'sheet-msg', modelLoadedOnce
+      ? 'Loading AI…'
+      : 'Downloading AI model (one-time, ~150 MB — Wi-Fi recommended)…');
+    box.append(msg);
+    openSheet(box, () => { if (!proceeding) cancelled = true; });
+
+    const items = [];
+    try {
+      await Classifier.ensureReady((pct) => {
+        msg.textContent = (modelLoadedOnce ? 'Loading AI… ' : 'Downloading AI model (one-time, ~150 MB)… ') + pct + '%';
+      });
+      if (!modelLoadedOnce) {
+        modelLoadedOnce = true;
+        DB.setMeta({ key: 'modelLoadedOnce', value: true }).catch(() => {});
+      }
+      for (let i = 0; i < files.length; i++) {
+        if (cancelled) { App.toast('Import cancelled'); return; }
+        msg.textContent = '✨ Looking at photo ' + (i + 1) + ' of ' + files.length + '…';
+        const f = files[i];
+        let t;
+        try { t = await makeThumb(f); }
+        catch (e) { items.push({ file: f, unreadable: true }); continue; }
+        let top = null, sug = null;
+        try {
+          top = await Classifier.classify(t.blob);
+          // If nothing really matches, suggest the main's "Other" bucket.
+          sug = top[0].p < 0.15 ? CATS.byMini[top[0].miniId].mainId + '_other' : top[0].miniId;
+        } catch (e) {
+          console.error('Could not classify', f.name, e);
+        }
+        items.push({ file: f, t, top, sug });
+      }
+    } catch (e) {
+      // The model couldn't load — never block the upload: manual picker instead.
+      console.error(e);
+      if (cancelled) { App.toast('Import cancelled'); return; }
+      App.toast("⚠️ The AI couldn't load — pick the category yourself");
+      proceeding = true;
+      openManualPickSheet(files);
+      return;
+    }
+    if (cancelled) { App.toast('Import cancelled'); return; }
+    proceeding = true;
+    startAiReview(items);
+  }
+
+  // One review sheet per photo: the AI's pick pre-fills the picker and the
+  // user accepts or overrides — nothing is ever submitted silently.
+  function startAiReview(items) {
+    const readable = items.filter((it) => !it.unreadable);
+    const bad = items.length - readable.length;
+    if (bad) App.toast('⚠️ ' + bad + ' photo' + (bad > 1 ? 's' : '') + " couldn't be read (unsupported format)");
+    if (!readable.length) return;
+    let idx = 0, added = 0, proceeding = false, thumbUrl = null;
+
+    const onSheetClosed = () => {
+      if (thumbUrl) { URL.revokeObjectURL(thumbUrl); thumbUrl = null; }
+      if (proceeding) { proceeding = false; return; }
+      const remaining = readable.length - idx;
+      if (remaining > 0) App.toast('Import stopped — ' + remaining + ' photo' + (remaining > 1 ? 's' : '') + ' not added');
+    };
+
+    const showNext = () => {
+      if (idx >= readable.length) {
+        proceeding = true;
+        closeSheet();
+        if (added) App.toast('✨ Added ' + added + ' photo' + (added > 1 ? 's' : ''));
+        return;
+      }
+      const it = readable[idx];
+      const box = h('div', 'sheet-content');
+      box.append(h('h3', 'sheet-title', readable.length > 1 ? 'Photo ' + (idx + 1) + ' of ' + readable.length : '✨ AI suggestion'));
+      const img = h('img', 'review-thumb');
+      thumbUrl = URL.createObjectURL(it.t.blob);
+      img.src = thumbUrl;
+      img.alt = it.file.name || 'photo';
+      box.append(img);
+      if (it.sug) {
+        const mini = CATS.byMini[it.sug], main = CATS.mainById[mini.mainId];
+        box.append(h('p', 'review-sug', '✨ AI suggests: ' + main.emoji + ' ' + main.name + ' ▸ ' + mini.emoji + ' ' + mini.name));
+      } else {
+        box.append(h('p', 'review-sug warn', "⚠️ The AI couldn't decide on this one — pick a category yourself."));
+      }
+      const err = h('p', 'pick-err', 'Please pick a category first.');
+      err.hidden = true;
+      const picker = buildPicker(it.sug || null, () => { err.hidden = true; });
+      box.append(picker.el, err);
+      const row = h('div', 'sheet-actions');
+      const skip = h('button', 'btn ghost', "Don't add");
+      const accept = h('button', 'btn primary', it.sug ? 'Accept' : 'Add photo');
+      skip.onclick = () => { idx++; proceeding = true; showNext(); };
+      accept.onclick = async () => {
+        const miniId = picker.get();
+        if (!miniId) { err.hidden = false; return; }
+        accept.disabled = true; skip.disabled = true;
+        accept.textContent = 'Adding…';
+        try {
+          const rec = newRecord(it.file, it.t);
+          rec.miniCat = miniId;
+          rec.mainCat = CATS.byMini[miniId].mainId;
+          if (it.top) rec.aiTop = it.top;
+          await DB.putPhoto(rec);
+          photos.unshift(rec);
+          added++;
+          refreshSoft();
+        } catch (e) {
+          console.error(e);
+          App.toast("⚠️ Couldn't save that photo");
+        }
+        idx++;
+        proceeding = true;
+        showNext();
+      };
+      row.append(skip, accept);
+      box.append(row);
+      openSheet(box, onSheetClosed);
+    };
+    showNext();
   }
 
   fileInput.addEventListener('change', () => {
@@ -232,6 +451,8 @@
   });
 
   // ---------- AI sorting queue ----------
+  // Only used for photos imported by older versions that are still waiting
+  // ('pending'); new imports are categorized before they are saved.
 
   function setProgress(text, pct, showRetry) {
     progressDock.hidden = false;
@@ -505,7 +726,7 @@
       const hero = h('div', 'hero');
       hero.append(h('div', 'hero-emoji', '📸'));
       hero.append(h('h1', 'hero-title', 'Your photos, sorted by AI'));
-      hero.append(h('p', 'hero-sub', 'Import pictures from your gallery — or take one with your camera — and SnapSort files each one into the right category automatically: Nature, Friends & Family, School, Food, and Daily Life.'));
+      hero.append(h('p', 'hero-sub', 'Import pictures from your gallery — or take one with your camera — then pick the category yourself or let the AI suggest one: Nature, Friends & Family, School, Food, and Daily Life.'));
       const btns = h('div', 'hero-btns');
       const btn = h('label', 'btn primary big');
       btn.htmlFor = 'fileInput';
