@@ -772,8 +772,53 @@
       cards.append(card);
     }
     frag.append(cards);
+
+    const exp = h('button', 'btn ghost big wide export-btn', '⬇️ Download all photos (' + photos.length + ')');
+    exp.disabled = !photos.length;
+    exp.onclick = () => App.exportAll();
+    frag.append(exp);
+
     view.replaceChildren(frag);
   }
+
+  App.exportAll = async () => {
+    if (!photos.length) { App.toast('No photos to download yet'); return; }
+    let cancelled = false;
+    const box = h('div', 'sheet-content');
+    box.append(h('h3', 'sheet-title', '⬇️ Download all photos'));
+    const msg = h('p', 'sheet-msg', 'Preparing…');
+    const track = h('div', 'exp-track');
+    const fill = h('div', 'exp-fill');
+    track.append(fill);
+    const cancelBtn = h('button', 'btn ghost big wide', 'Cancel');
+    cancelBtn.onclick = () => { cancelled = true; closeSheet(); };
+    box.append(msg, track, cancelBtn);
+    openSheet(box, () => { cancelled = true; });
+    try {
+      const entries = Exporter.plan(photos);
+      const blob = await Exporter.build(entries, (done, total) => {
+        const pct = Math.round((done / total) * 100);
+        msg.textContent = 'Adding photo ' + done + ' of ' + total + '… ' + pct + '%';
+        fill.style.width = pct + '%';
+      }, () => cancelled);
+      if (!blob) { App.toast('Export cancelled — nothing was downloaded'); return; }
+      const name = 'snapsort-' + new Date().toISOString().slice(0, 10) + '.zip';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      closeSheet();
+      App.toast('⬇️ Downloading ' + name);
+    } catch (e) {
+      console.error(e);
+      closeSheet();
+      App.toast('⚠️ Export failed — nothing was downloaded.' + (e && e.message ? ' ' + e.message : ''));
+    }
+  };
 
   function renderCat(mainId) {
     const main = CATS.mainById[mainId];

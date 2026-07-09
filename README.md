@@ -16,6 +16,7 @@ To use it on your **phone**, the site needs to be hosted online (for example wit
 4. Tap any photo to view it fullscreen — pinch or double-tap to **zoom**, swipe to move between photos, swipe down to close.
 5. Use **✏️ Edit** to crop, rotate, flip, and adjust brightness / contrast / saturation. You can always restore the original.
 6. If the AI ever picks the wrong spot, use **📂 Move** to place the photo yourself.
+7. **⬇️ Download all photos** (on the home screen) saves everything as one `.zip`, organised into `Category/Sub-category` folders — built on your device, so photos still never leave it.
 
 > **First import only:** the AI model (~150 MB) is downloaded once and then stored on your device — Wi-Fi recommended. After that it loads instantly, even offline (when hosted).
 
