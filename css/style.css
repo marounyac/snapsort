@@ -130,8 +130,18 @@ body.auth-locked #topbar, body.auth-locked .fab { display: none; }
 .hero-emoji { font-size: 64px; margin-bottom: 14px; }
 .hero-title { font-size: 27px; font-weight: 800; margin-bottom: 10px; }
 .hero-sub { color: var(--dim); font-size: 15px; line-height: 1.55; margin-bottom: 22px; }
-.hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .hero-note { color: var(--dim); font-size: 13px; line-height: 1.7; margin-top: 22px; white-space: pre-line; }
+
+/* home actions row (Take photo / Import) */
+.actions-row { display: flex; gap: 10px; margin: 10px 0 22px; }
+.actions-row .btn { flex: 1; }
+.actions-row .btn.ghost { background: var(--surface); border: 1px solid var(--line); }
+.actions-row .btn:active { transform: scale(0.98); }
+@media (hover: hover) {
+  .actions-row .btn.primary:hover { filter: brightness(1.12); }
+  .actions-row .btn.ghost:hover { border-color: var(--accent); }
+}
+@media (max-width: 560px) { .actions-row { flex-direction: column; } }
 
 /* all-photos bar */
 .allbar {

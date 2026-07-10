@@ -674,24 +674,34 @@
     return h('p', 'empty-note', text);
   }
 
+  function actionsRow() {
+    const row = h('div', 'actions-row');
+    const camBtn = h('label', 'btn ghost big');
+    camBtn.htmlFor = 'cameraInput';
+    camBtn.textContent = '📷 Take photo';
+    const impBtn = h('label', 'btn primary big');
+    impBtn.htmlFor = 'fileInput';
+    impBtn.textContent = '＋ Import';
+    for (const b of [camBtn, impBtn]) {
+      b.tabIndex = 0;
+      b.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); b.click(); }
+      });
+    }
+    row.append(camBtn, impBtn);
+    return row;
+  }
+
   function renderHome() {
     setTopbar(null);
     const frag = document.createDocumentFragment();
+    frag.append(actionsRow());
 
     if (!photos.length) {
       const hero = h('div', 'hero');
       hero.append(h('div', 'hero-emoji', '📸'));
       hero.append(h('h1', 'hero-title', 'Your photos, sorted by AI'));
       hero.append(h('p', 'hero-sub', 'Import pictures from your gallery — or take one with your camera — then pick the category yourself or let the AI suggest one: Nature, Friends & Family, School, Food, and Daily Life.'));
-      const btns = h('div', 'hero-btns');
-      const btn = h('label', 'btn primary big');
-      btn.htmlFor = 'fileInput';
-      btn.textContent = '＋ Import photos';
-      const camBtn = h('label', 'btn ghost big');
-      camBtn.htmlFor = 'cameraInput';
-      camBtn.textContent = '📷 Take a photo';
-      btns.append(btn, camBtn);
-      hero.append(btns);
       hero.append(h('p', 'hero-note', '🔒 Private: photos never leave your device.\n📥 The first import downloads the AI model (~150 MB, one time) — Wi-Fi recommended.'));
       const manage = h('button', 'btn ghost manage-btn', '🗂️ Manage categories');
       manage.onclick = () => openManageSheet();
