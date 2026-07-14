@@ -1,13 +1,21 @@
-// SnapSort — sign-in gate. Accounts live in IndexedDB on this device only;
-// passwords are never stored — only a PBKDF2 (SHA-256) hash with a per-user salt.
+// SnapSort — sign-in gate.
+// With the backend configured and reachable, accounts are real Supabase Auth
+// accounts (username → synthetic email) that work on any device; passwords are
+// hashed server-side and never stored. When the backend can't be reached
+// (offline, file://), it falls back to the original on-device accounts:
+// PBKDF2 (SHA-256) hashes in IndexedDB, never plaintext.
 (() => {
   const SESSION_KEY = 'snapsort.session';
+  const CLOUD_FLAG = 'snapsort.cloudAccount'; // set once a cloud login/signup succeeds here
+  const EMAIL_DOMAIN = '@snapsort.local';     // usernames become synthetic emails
   const ITERATIONS = 150000;
   const $ = (id) => document.getElementById(id);
+  let cloud = null; // Supabase client in cloud mode, null in on-device mode
 
   const screen = $('authScreen');
   const sub = $('authSub');
   const toggle = $('authToggle');
+  const note = $('authNote');
 
   const loginForm = $('loginForm');
   const liUser = $('liUser'), liPass = $('liPass'), liErr = $('liErr'), liSubmit = $('liSubmit');
@@ -100,7 +108,9 @@
     if (err) { showErr(suErr1, err); return; }
     busy(suNext, 'Checking…');
     try {
-      if (await DB.userGet(norm(suUser.value))) {
+      // Cloud mode can only detect a taken username at account creation, so
+      // the availability check here is on-device mode only.
+      if (!cloud && await DB.userGet(norm(suUser.value))) {
         showErr(suErr1, 'That username is already taken on this device.');
         return;
       }
@@ -133,6 +143,30 @@
     busy(suSubmit, 'Creating account…');
     try {
       const username = norm(chosenName);
+
+      if (cloud) {
+        const { error } = await cloud.auth.signUp({
+          email: username + EMAIL_DOMAIN,
+          password: suPass.value,
+          options: { data: { username: chosenName.trim() } },
+        });
+        if (error) {
+          const m = (error.message || '').toLowerCase();
+          if (m.includes('already registered') || m.includes('database error')) {
+            showErr(suErr2, 'That username is already taken — try another.');
+          } else if (m.includes('fetch') || m.includes('network')) {
+            showErr(suErr2, 'No connection — check your internet and try again.');
+          } else {
+            showErr(suErr2, 'Could not create the account — please try again.');
+          }
+          busy(suSubmit);
+          return;
+        }
+        try { localStorage.setItem(CLOUD_FLAG, '1'); } catch (e3) { /* ignore */ }
+        finish(username);
+        return;
+      }
+
       if (await DB.userGet(username)) {
         showErr(suErr2, 'That username is already taken on this device.');
         busy(suSubmit);
@@ -158,6 +192,23 @@
     }
     busy(liSubmit, 'Logging in…');
     try {
+      if (cloud) {
+        const { error } = await cloud.auth.signInWithPassword({
+          email: norm(liUser.value) + EMAIL_DOMAIN,
+          password: liPass.value,
+        });
+        if (error) {
+          const m = (error.message || '').toLowerCase();
+          if (m.includes('invalid login')) showErr(liErr, 'Wrong username or password.');
+          else if (m.includes('fetch') || m.includes('network')) showErr(liErr, 'No connection — check your internet and try again.');
+          else showErr(liErr, 'Something went wrong — please try again.');
+          return;
+        }
+        try { localStorage.setItem(CLOUD_FLAG, '1'); } catch (e3) { /* ignore */ }
+        finish(norm(liUser.value));
+        return;
+      }
+
       const rec = await DB.userGet(norm(liUser.value));
       // Hash even when the user doesn't exist so both failures take the same time.
       const hash = await hashPassword(liPass.value, rec ? rec.salt : newSalt(), rec ? rec.iterations : ITERATIONS);
@@ -176,27 +227,70 @@
       try { return localStorage.getItem(SESSION_KEY); } catch (e) { return null; }
     },
 
-    init(cb) {
+    async init(cb) {
       onAuthed = cb;
+      // Anyone already signed in on this device (cloud or on-device account)
+      // goes straight in — no network needed to open your own photos.
       if (this.currentUser()) {
         document.body.classList.remove('auth-locked');
         cb();
         return;
       }
-      // Returning device with accounts → default to Log in; brand new → Sign up.
-      DB.userCount()
-        .then((n) => setMode(n > 0 ? 'login' : 'signup'))
-        .catch(() => setMode('signup'));
-      setMode('signup');
+
       document.body.classList.add('auth-locked');
+      cloud = Backend.configured() ? await Backend.getClient() : null;
+
+      if (cloud) {
+        // A previous cloud session may still be valid (supabase-js persists it).
+        try {
+          const { data } = await cloud.auth.getSession();
+          const user = data && data.session && data.session.user;
+          if (user) {
+            const name = (user.user_metadata && user.user_metadata.username) ||
+              (user.email || '').replace(EMAIL_DOMAIN, '');
+            finish(norm(name || 'me'));
+            return;
+          }
+        } catch (e) { /* fall through to the gate */ }
+        note.textContent = '🔒 Your account works on any device. Photos stay on this device unless you share them.';
+        let hasCloud = false;
+        try { hasCloud = !!localStorage.getItem(CLOUD_FLAG); } catch (e) { /* ignore */ }
+        setMode(hasCloud ? 'login' : 'signup');
+        // Existing on-device accounts can't log in to the cloud — say so once.
+        if (!hasCloud) {
+          DB.userCount().then((n) => {
+            if (n > 0) sub.textContent = 'Accounts now work on any device — create yours once more. The photos on this device are untouched.';
+          }).catch(() => { /* ignore */ });
+        }
+      } else {
+        note.textContent = '🔒 No connection — this account will work on this device only.';
+        // Returning device with accounts → default to Log in; brand new → Sign up.
+        setMode('signup');
+        DB.userCount()
+          .then((n) => setMode(n > 0 ? 'login' : 'signup'))
+          .catch(() => { /* keep signup */ });
+      }
+
       screen.hidden = false;
       suUser.focus();
       console.log('SnapSort auth gate shown');
     },
 
     logOut() {
-      try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
-      location.reload();
+      const done = () => {
+        try {
+          localStorage.removeItem(SESSION_KEY);
+          // Belt and braces: drop any supabase-js session token too, so a
+          // logged-out device never auto-logs back in on the next load.
+          for (const k of Object.keys(localStorage)) {
+            if (k.startsWith('sb-')) localStorage.removeItem(k);
+          }
+        } catch (e) { /* ignore */ }
+        location.reload();
+      };
+      const c = cloud ? Promise.resolve(cloud)
+        : (Backend.configured() ? Backend.getClient() : Promise.resolve(null));
+      c.then((cl) => (cl ? cl.auth.signOut() : null)).then(done, done);
     },
   };
 })();

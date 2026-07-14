@@ -4,6 +4,6 @@
 // While these are empty, all social features stay hidden and SnapSort works
 // exactly as the solo, on-device app it always was.
 window.SNAPSORT_CONFIG = {
-  supabaseUrl: '',      // e.g. 'https://abcdefghijkl.supabase.co'
-  supabaseAnonKey: '',  // Settings → API → anon public key
+  supabaseUrl: 'https://rpfbcmweonccjzhthxpj.supabase.co',
+  supabaseAnonKey: 'sb_publishable_8cs4e9jzzk_NvyVG06EEDA_ppUlGeWN',
 };

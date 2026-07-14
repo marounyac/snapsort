@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SnapSort — AI Photo Organizer</title>
-  <meta name="description" content="Import photos from your gallery and let AI sort them into categories — right in your browser. Private: photos never leave your device.">
+  <meta name="description" content="Import photos from your gallery and let AI sort them into categories — right in your browser. Private by default: photos stay on your device unless you share them.">
   <meta name="theme-color" content="#0b0c10">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -76,7 +76,7 @@
       </form>
 
       <button id="authToggle" class="auth-toggle" type="button"></button>
-      <p class="auth-note">🔒 Accounts and photos are stored on this device only.</p>
+      <p class="auth-note" id="authNote">🔒 Your account works on any device. Photos stay on this device unless you share them.</p>
     </div>
   </div>
 

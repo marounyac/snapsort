@@ -1,6 +1,8 @@
 # 📸 SnapSort — AI Photo Organizer
 
-A website that sorts your photos into categories automatically using AI — running **entirely in your browser**. No account, no server, no API keys. Your photos never leave your device.
+A website that sorts your photos into categories automatically using AI — running **entirely in your browser**. No API keys. **Private by default: photos stay on your device unless you share them.**
+
+Your account works on any device (backed by Supabase Auth); when you're offline or open the site straight from a file, it falls back to an account stored on that device only. Sorting, editing, and the AI itself always run locally in the browser.
 
 ## How to open it
 

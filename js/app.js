@@ -702,7 +702,7 @@
       hero.append(h('div', 'hero-emoji', '📸'));
       hero.append(h('h1', 'hero-title', 'Your photos, sorted by AI'));
       hero.append(h('p', 'hero-sub', 'Import pictures from your gallery — or take one with your camera — then pick the category yourself or let the AI suggest one: Nature, Friends & Family, School, Food, and Daily Life.'));
-      hero.append(h('p', 'hero-note', '🔒 Private: photos never leave your device.\n📥 The first import downloads the AI model (~150 MB, one time) — Wi-Fi recommended.'));
+      hero.append(h('p', 'hero-note', '🔒 Private by default: photos stay on your device unless you share them.\n📥 The first import downloads the AI model (~150 MB, one time) — Wi-Fi recommended.'));
       const manage = h('button', 'btn ghost manage-btn', '🗂️ Manage categories');
       manage.onclick = () => openManageSheet();
       hero.append(manage);
